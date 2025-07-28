@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    
+    {
+      "name": "FastAPI: whisper-backend",
+      "type": "python",
+      "request": "launch",
+      "program": "-m",
+      "args": [
+        "uvicorn",
+        "whisper-backend.main:app",
+        "--reload"
+      ],
+      "env": {
+        "KMP_DUPLICATE_LIB_OK": "TRUE"
+      },
+      "console": "integratedTerminal"
+    }
+  ]
+}
