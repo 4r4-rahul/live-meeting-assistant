@@ -1,15 +1,15 @@
 
 import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import openai
 import whisper
-from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings, OpenAI
 from langchain_community.vectorstores import FAISS
 from langchain_text_splitters import CharacterTextSplitter
-from langchain_community.llms import OpenAI as LangChainOpenAI
 from langchain.chains import RetrievalQA, ConversationalRetrievalChain
 
 
@@ -40,7 +40,7 @@ async def conversational_qa(req: ConversationalQARequest):
     vectorstore = FAISS.from_documents(docs, embeddings)
     retriever = vectorstore.as_retriever()
     qa = ConversationalRetrievalChain.from_llm(
-        llm=LangChainOpenAI(openai_api_key=os.getenv("OPENAI_API_KEY")),
+        llm=OpenAI(openai_api_key=os.getenv("OPENAI_API_KEY")),
         retriever=retriever
     )
     import traceback
@@ -52,7 +52,10 @@ async def conversational_qa(req: ConversationalQARequest):
         # Update chat history
         updated_history = req.chat_history + [(req.question, answer)]
         print("[DEBUG] Returning answer:", answer)
-        return {"answer": answer, "chat_history": updated_history}
+        print("[DEBUG] Returning chat_history:", updated_history)
+        response = {"answer": answer, "chat_history": updated_history}
+        print("[DEBUG] Response to client:", response)
+        return response
     except Exception as e:
         print("[ERROR] LangChain exception:", str(e))
         traceback.print_exc()
@@ -73,13 +76,16 @@ async def context_qa(req: ContextQARequest):
     vectorstore = FAISS.from_documents(docs, embeddings)
     retriever = vectorstore.as_retriever()
     qa = RetrievalQA.from_chain_type(
-        llm=LangChainOpenAI(openai_api_key=os.getenv("OPENAI_API_KEY")),
+        llm=OpenAI(openai_api_key=os.getenv("OPENAI_API_KEY")),
         chain_type="stuff",
         retriever=retriever
     )
     try:
         answer = qa.run(req.question)
-        return {"answer": answer}
+        print("[DEBUG] ContextQA answer:", answer)
+        response = {"answer": answer}
+        print("[DEBUG] Response to client:", response)
+        return response
     except Exception as e:
         return {"error": str(e)}
 
