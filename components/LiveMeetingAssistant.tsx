@@ -3,6 +3,9 @@ import { Button } from "./ui/button";
 import { Mic, MicOff, User, Bot, Volume2 } from "lucide-react";
 
 export default function LiveMeetingAssistant() {
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [contextText, setContextText] = useState<string>("");
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
   const [isListening, setIsListening] = useState(false);
@@ -13,6 +16,35 @@ export default function LiveMeetingAssistant() {
   const [toast, setToast] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
   const chatBoxRef = useRef<HTMLDivElement>(null);
+
+  // File upload handler
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadError(null);
+    setContextText("");
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const response = await fetch("http://localhost:8000/upload-context/", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        setUploadError(data.error || "Upload failed");
+      } else {
+        setContextText(data.context_text || "");
+        setToast("File uploaded and context extracted!");
+      }
+    } catch (err: any) {
+      setUploadError(err.message || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+// ...existing code...
 
 
 
@@ -79,7 +111,7 @@ export default function LiveMeetingAssistant() {
         if (final.trim()) {
           setChatHistory((prev) => {
             const updated: { role: "user" | "ai"; text: string; timestamp: number }[] = [...prev, { role: "user", text: final.trim(), timestamp: Date.now() }];
-            sendToConversationalQA(final.trim(), updated);
+            sendToBackend(final.trim(), updated, 'qa');
             return updated;
           });
         }
@@ -107,30 +139,56 @@ export default function LiveMeetingAssistant() {
     }
   };
 
-  const sendToConversationalQA = async (question: string, updatedHistory: { role: "user" | "ai"; text: string }[]) => {
+
+  // Helper to handle both endpoints and errors
+  const sendToBackend = async (input: string, updatedHistory: { role: "user" | "ai"; text: string }[], mode: 'qa' | 'smart') => {
     setError(null);
     try {
-      const response = await fetch("http://localhost:8000/conversational-qa/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcript: updatedHistory.map((m) => m.text).join("\n"),
-          question,
-          chat_history: updatedHistory
-            .filter((m) => m.role === 'user' || m.role === 'ai')
-            .reduce((arr, m, idx, src) => {
-              if (m.role === 'user' && src[idx + 1]?.role === 'ai') {
-                arr.push([m.text, src[idx + 1].text]);
-              }
-              return arr;
-            }, [] as [string, string][]),
-        }),
-      });
-      const data = await response.json();
-      if (data.answer) {
+      let response;
+      if (mode === 'qa') {
+        response = await fetch("http://localhost:8000/conversational-qa/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transcript: updatedHistory.map((m) => m.text).join("\n"),
+            question: input,
+            chat_history: updatedHistory
+              .filter((m) => m.role === 'user' || m.role === 'ai')
+              .reduce((arr, m, idx, src) => {
+                if (m.role === 'user' && src[idx + 1]?.role === 'ai') {
+                  arr.push([m.text, src[idx + 1].text]);
+                }
+                return arr;
+              }, [] as [string, string][]),
+          }),
+        });
+      } else {
+        response = await fetch("http://localhost:8000/smart-respond/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transcript: input,
+            // Optionally allow user to set role in UI later
+          }),
+        });
+      }
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        setError('Invalid server response');
+        setToast('Invalid server response');
+        return;
+      }
+      if (!response.ok) {
+        setError(data.detail || data.error || 'Server error');
+        setToast(data.detail || data.error || 'Server error');
+        return;
+      }
+      if (data.answer || data.response) {
         setChatHistory((prev) => [
           ...prev,
-          { role: 'ai', text: data.answer, timestamp: Date.now() }
+          { role: 'ai', text: data.answer || data.response, timestamp: Date.now() }
         ]);
       } else if (data.error) {
         setError(data.error);
@@ -151,7 +209,7 @@ export default function LiveMeetingAssistant() {
       updated = [...prev, { role: "user", text: trimmed, timestamp: Date.now() }];
       return updated;
     });
-    sendToConversationalQA(trimmed, updated);
+    sendToBackend(trimmed, updated, 'smart');
     setChatInput("");
   };
 
@@ -168,6 +226,25 @@ export default function LiveMeetingAssistant() {
         </div>
       )}
 
+      {/* File upload for context extraction */}
+      <div className="flex items-center gap-3 px-6 pt-6 pb-2">
+        <label className="font-semibold pr-2 text-[#e5e7eb]">Upload Context File:</label>
+        <input
+          type="file"
+          accept=".pdf,.txt,.docx"
+          onChange={handleFileUpload}
+          disabled={uploading}
+          className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-600 file:text-white hover:file:bg-green-700"
+        />
+        {uploading && <span className="text-green-400 animate-pulse">Uploading...</span>}
+        {uploadError && <span className="text-red-400 ml-2">{uploadError}</span>}
+      </div>
+      {contextText && (
+        <div className="mx-6 mb-2 p-3 bg-[#343541] rounded-lg text-sm text-green-200 border border-green-700 max-h-40 overflow-y-auto">
+          <div className="font-semibold mb-1 text-green-300">Extracted Context:</div>
+          <pre className="whitespace-pre-wrap break-words">{contextText}</pre>
+        </div>
+      )}
       {/* Audio input device selection */}
       <div className="flex items-center gap-2 pb-4 pt-8 px-6">
         <label className="font-semibold pr-2 text-[#e5e7eb]">Input Device:</label>
