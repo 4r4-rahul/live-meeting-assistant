@@ -1,0 +1,12 @@
+# Live-meeting-assistant backend (Claude-powered). Reconstructed 2026-06.
+# Pinned 2026-07 to exact working versions so a fresh machine reproduces this env
+# (faster-whisper + pdfplumber were previously declared but missing → silent failures).
+fastapi==0.139.0
+uvicorn[standard]==0.51.0
+python-multipart==0.0.32
+anthropic==0.116.0
+faster-whisper==1.2.1
+pydantic==2.13.4
+python-dotenv==1.2.2
+pdfplumber==0.11.10
+python-docx==1.2.0
