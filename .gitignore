@@ -1,5 +1,28 @@
+# secrets — NEVER commit real keys. (The old OpenAI key in environment/dev.env is in git
+# history — ROTATE it; gitignoring is not enough once it's been pushed.)
+.env
+.env.*
+!.env.example
+environment/dev.env
+environment/*.env
+
+# node / next
 node_modules/
 .next/
-.env*
+out/
 
-node_modules/
+# python
+.venv/
+__pycache__/
+*.pyc
+
+# audio / scratch
+*.wav
+
+# stray data + os/editor junk
+*.csv
+.DS_Store
+.vscode/
+
+# ts build cache
+tsconfig.tsbuildinfo
