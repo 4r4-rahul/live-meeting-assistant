@@ -3,3 +3,10 @@ node_modules/
 .env*
 
 node_modules/
+
+# environment files and dependencies are never committed
+.env
+.env.*
+!.env.example
+environment/*.env
+node_modules/
